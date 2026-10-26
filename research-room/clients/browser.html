@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research Room</title>
+<style>
+	:root { --bg:#fff; --fg:#1b1f24; --muted:#6b7480; --line:#d8dde3; --user:#e8f0fe; --agent:#f3f4f6; --accent:#2457d6; }
+	@media (prefers-color-scheme: dark) { :root { --bg:#12151a; --fg:#e6e9ee; --muted:#8b95a3; --line:#2a313a; --user:#1c2a47; --agent:#1d222a; --accent:#6b9bff; } }
+	body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,sans-serif; display:grid; grid-template-columns:1fr 280px; height:100vh; }
+	main { display:flex; flex-direction:column; min-width:0; }
+	#log { flex:1; overflow:auto; padding:16px; }
+	.msg { padding:8px 12px; margin:8px 0; border-radius:8px; white-space:pre-wrap; overflow-wrap:anywhere; }
+	.user { background:var(--user); } .assistant, .tool { background:var(--agent); } .tool { color:var(--muted); font-size:13px; }
+	.partial { opacity:.7; }
+	form { display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--line); }
+	input[type=text] { flex:1; padding:8px; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:6px; }
+	button { padding:8px 12px; border:1px solid var(--line); background:var(--bg); color:var(--fg); border-radius:6px; cursor:pointer; }
+	button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+	aside { border-left:1px solid var(--line); padding:16px; overflow:auto; font-size:13px; }
+	h2 { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:16px 0 6px; }
+	h2:first-child { margin-top:0; }
+	#status { font-weight:600; }
+	@media (max-width:700px) { body { grid-template-columns:1fr; grid-template-rows:1fr auto; } aside { border-left:0; border-top:1px solid var(--line); max-height:30vh; } }
+</style>
+</head>
+<body>
+<main>
+	<div id="log"></div>
+	<form id="form">
+		<input id="text" type="text" placeholder="Ask something, e.g. research SQLite vs Postgres" autocomplete="off">
+		<label><input id="steer" type="checkbox"> steer</label>
+		<button class="primary">Send</button>
+		<button type="button" id="abort">Abort</button>
+	</form>
+</main>
+<aside>
+	<h2>Status</h2><div id="status">connecting</div>
+	<h2>Tasks</h2><div id="tasks">-</div>
+	<h2>Conversations</h2><div id="convs">-</div>
+	<h2>Notices</h2><div id="notices">-</div>
+</aside>
+<script>
+const token = new URLSearchParams(location.hash.slice(1)).get("token") || "";
+const headers = { authorization: "Bearer " + token, "content-type": "application/json" };
+const $ = (id) => document.getElementById(id);
+const post = (path, body) => fetch(path, { method: "POST", headers, body: JSON.stringify(body) }).then(async (r) => { if (!r.ok) $("notices").textContent = path + ": " + r.status + " " + await r.text(); });
+const el = (cls, text) => { const d = document.createElement("div"); d.className = cls; d.textContent = text; return d; };
+
+function render(s) {
+	const log = $("log"), atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+	log.replaceChildren(...s.entries.filter((e) => e.text).map((e) => el("msg " + e.role, e.text)));
+	if (s.partial) log.append(el("msg assistant partial", s.partial));
+	for (const t of s.tools) if (t.status === "running") log.append(el("msg tool", t.name + ": " + t.output));
+	if (atBottom) log.scrollTop = log.scrollHeight;
+	$("status").textContent = s.busy ? "busy" : "idle";
+	$("tasks").textContent = s.tasks.map((t) => t.kind + " (" + t.status + ")").join("\n") || "-";
+	$("tasks").style.whiteSpace = "pre-wrap";
+	$("convs").replaceChildren(...s.conversations.map((c) => { const b = document.createElement("button"); b.textContent = c.label + (c.title ? ": " + c.title.slice(0, 40) : ""); b.style.display = "block"; b.style.marginBottom = "4px"; b.onclick = () => post("/switch", { id: c.id }); return b; }));
+	$("notices").textContent = s.notices.map((n) => n.level + ": " + n.message).join("\n") || "-";
+}
+
+$("form").onsubmit = (e) => { e.preventDefault(); const text = $("text").value.trim(); if (!text) return; $("text").value = ""; post("/submit", { text, whenBusy: $("steer").checked ? "steer" : "followUp" }); };
+$("abort").onclick = () => post("/abort", {});
+
+// fetch-based SSE so the token goes in a header, not the URL.
+(async function attach() {
+	try {
+		const r = await fetch("/events", { headers });
+		if (!r.ok) { $("status").textContent = "auth failed (" + r.status + ")"; return; }
+		const reader = r.body.getReader(), decoder = new TextDecoder();
+		let buf = "";
+		for (;;) {
+			const { value, done } = await reader.read();
+			if (done) break;
+			buf += decoder.decode(value, { stream: true });
+			let i;
+			while ((i = buf.indexOf("\n\n")) >= 0) {
+				const line = buf.slice(0, i).split("\n").find((l) => l.startsWith("data: "));
+				buf = buf.slice(i + 2);
+				if (line) render(JSON.parse(line.slice(6)));
+			}
+		}
+	} catch {}
+	$("status").textContent = "disconnected, retrying";
+	setTimeout(attach, 1500);
+})();
+</script>
+</body>
+</html>

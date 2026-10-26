@@ -1,0 +1,9 @@
+{
+	"name": "research-room",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"server": "node --import ../pi/packages/coding-agent/src/experimental/source-resolver.ts server.ts",
+		"client": "node clients/terminal.ts"
+	}
+}

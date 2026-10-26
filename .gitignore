@@ -1,0 +1,5 @@
+pi/
+node_modules
+.env
+*.sqlite
+.DS_Store
