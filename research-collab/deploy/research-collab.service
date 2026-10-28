@@ -1,0 +1,22 @@
+[Unit]
+Description=research-collab (durable shared research room)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=boxd
+WorkingDirectory=/home/boxd/research-collab
+# Secrets (OPENROUTER_API_KEY, ROOM_HOST_TOKEN) live in a mode-600 file, not in this unit.
+EnvironmentFile=/home/boxd/.research-collab.env
+Environment=ROOM_HOST=0.0.0.0
+Environment=ROOM_PORT=4790
+Environment=ROOM_DATA_DIR=/home/boxd/research-collab-data
+ExecStart=/usr/local/bin/node src/server.ts
+# A stop writes no outcome: an interrupted run resumes on the next start.
+Restart=always
+RestartSec=2
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

@@ -8,7 +8,12 @@ Experiments on top of [earendil-works/pi](https://github.com/earendil-works/pi)'
 - [`research-room/`](research-room): the same agent behind a small HTTP/SSE server, with a terminal client, a
   browser page and a `curl` client attached to one shared run.
 
-## Setup
+- [`research-collab/`](research-collab): a shared research room for several people. Everyone steers one durable agent from
+  their own browser, with per-person invites, attributed messages, a polished UI, and a deploy script for [boxd](https://boxd.sh).
+  Unlike the other two, it is self-contained: it depends on the published `@earendil-works/pi-durable@1.0.3` packages from npm
+  and needs no pi checkout (see its README).
+
+## Setup (research-agent and research-room)
 
 These projects import pi's source, so they expect a pi checkout next to them, at the commit that has the vacation example:
 
